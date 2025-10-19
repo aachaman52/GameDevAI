@@ -1,0 +1,14 @@
+{
+  "app_name": "GameDev AI Assistant",
+  "version": "1.0.0",
+  "ai_model": "llama3.2:3b",
+  "unity_project_path": "",
+  "godot_project_path": "",
+  "unreal_project_path": "",
+  "current_engine": "unity",
+  "max_chat_history": 100,
+  "theme": "dark",
+  "auto_backup": true,
+  "asset_search_enabled": true,
+  "memory_enabled": true
+}

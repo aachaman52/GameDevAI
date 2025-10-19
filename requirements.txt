@@ -1,0 +1,13 @@
+# GameDev AI Assistant - Dependencies
+# Version 1.0.0 FINAL
+
+# Core Requirements
+requests>=2.31.0          # API calls for Ollama and asset search
+psutil>=5.9.0             # System hardware detection
+py-cpuinfo>=9.0.0         # CPU information
+
+# GUI - Tkinter is built-in to Python 3.8+
+
+# Optional: Uncomment if needed
+# beautifulsoup4>=4.12.0  # Enhanced web scraping
+# pyinstaller>=6.0.0      # Build .exe files
