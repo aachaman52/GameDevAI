@@ -1,16 +1,6 @@
-"""Utility tools - Complete toolkit (All Phases)"""
-
+"""Utility Tools - Complete toolkit"""
 from .check_specs import SpecsChecker
 from .file_manager import FileManager
 from .logger import ActionLogger, get_logger
-from .search_assets import AssetSearcher, search_assets, recommend_assets
-
-__all__ = [
-    'SpecsChecker', 
-    'FileManager', 
-    'ActionLogger', 
-    'get_logger',
-    'AssetSearcher',
-    'search_assets',
-    'recommend_assets'
-]
+from .search_assets import AssetSearcher, search_assets
+__all__ = ['SpecsChecker', 'FileManager', 'ActionLogger', 'get_logger', 'AssetSearcher', 'search_assets']
