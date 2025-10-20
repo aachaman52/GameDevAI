@@ -1,6 +1,6 @@
 """
-Complete Chat Window - All Features Integrated
-Multi-Engine Support, Memory, Asset Search
+Modern GameDev AI Chat Window
+Complete Edition with Beautiful UI
 """
 
 import tkinter as tk
@@ -10,200 +10,348 @@ from pathlib import Path
 from datetime import datetime
 import threading
 
+
 class ChatWindow:
     def __init__(self):
-        self.root = tk.Tk()
-        self.root.title("GameDev AI Assistant - Complete Edition")
-        self.root.geometry("1100x750")
+        # Load config
+        try:
+            with open('config.json', 'r', encoding='utf-8') as f:
+                self.config = json.load(f)
+        except:
+            self.config = {
+                "ai_model": "llama3.2:3b",
+                "current_engine": "unity",
+                "memory_enabled": True,
+                "unity_project_path": "",
+                "godot_project_path": "",
+                "unreal_project_path": ""
+            }
+            self.save_config()
+
+        # Initialize subsystems
+        self.init_subsystems()
         
-        with open('config.json', 'r') as f:
-            self.config = json.load(f)
+        # Create main window
+        self.root = tk.Tk()
+        self.root.title("GameDev AI Assistant")
+        self.root.geometry("1200x800")
         
         self.chat_history = self.load_chat_history()
         self.current_engine = self.config.get('current_engine', 'unity')
         
-        self.setup_styles()
-        self.create_menu()
-        self.create_widgets()
+        self.setup_modern_styles()
+        self.create_ui()
         
-        from ai_core.model_interface import AIModel
-        from ai_core.memory import ProjectMemory
-        from tools.logger import get_logger
-        
-        self.ai = AIModel(self.config['ai_model'])
-        self.memory = ProjectMemory()
-        self.logger = get_logger()
-        
+        # Load project context
         self.load_project_context()
     
-    def setup_styles(self):
-        self.bg_color = "#1e1e1e"
-        self.fg_color = "#d4d4d4"
-        self.input_bg = "#2d2d2d"
-        self.button_bg = "#0e639c"
-        self.ai_msg_bg = "#2d3748"
-        self.user_msg_bg = "#1a365d"
-        self.root.configure(bg=self.bg_color)
+    def init_subsystems(self):
+        """Initialize AI, Memory, and Logger"""
+        # AI Model
+        try:
+            from ai_core.model_interface import AIModel
+            self.ai = AIModel(self.config.get('ai_model', 'llama3.2:3b'))
+        except:
+            class DummyAI:
+                def generate_response(self, *args, **kwargs):
+                    return "⚠️ AI module not available"
+                def check_ollama_status(self): return False
+            self.ai = DummyAI()
+        
+        # Memory
+        try:
+            from ai_core.memory import ProjectMemory
+            self.memory = ProjectMemory()
+        except:
+            class DummyMemory:
+                def get_project_info(self): 
+                    return {'name': 'Unnamed', 'engine': 'N/A'}
+                def list_scripts(self): return []
+                def list_todos(self): return []
+                def build_context_summary(self): return ""
+                def add_script(self, *a, **k): pass
+                def add_todo(self, *a, **k): pass
+                def clear_memory(self): pass
+                def set_project_info(self, **k): pass
+                def get_stats(self): return {
+                    "total_scripts": 0, "total_assets": 0,
+                    "pending_todos": 0, "completed_tasks": 0, "days_active": 0
+                }
+                def search_scripts(self, q): return []
+            self.memory = DummyMemory()
+        
+        # Logger
+        try:
+            from tools.logger import get_logger
+            self.logger = get_logger()
+        except:
+            import logging
+            self.logger = logging.getLogger("GameDevAI")
     
-    def create_menu(self):
-        menubar = tk.Menu(self.root, bg=self.bg_color, fg=self.fg_color)
+    def setup_modern_styles(self):
+        """Modern color scheme and fonts"""
+        # Dark theme colors
+        self.colors = {
+            'bg': '#0d1117',           # Main background
+            'surface': '#161b22',      # Surface elements
+            'surface_alt': '#21262d',  # Alternate surface
+            'border': '#30363d',       # Borders
+            'accent': '#58a6ff',       # Accent color (blue)
+            'accent_hover': '#79c0ff', # Accent hover
+            'success': '#3fb950',      # Success (green)
+            'warning': '#d29922',      # Warning (yellow)
+            'danger': '#f85149',       # Danger (red)
+            'text': '#c9d1d9',         # Primary text
+            'text_secondary': '#8b949e', # Secondary text
+            'user_msg': '#1f6feb',     # User messages
+            'ai_msg': '#238636',       # AI messages
+        }
         
-        file_menu = tk.Menu(menubar, tearoff=0, bg=self.bg_color, fg=self.fg_color)
-        file_menu.add_command(label="Open Unity Project", command=lambda: self.select_project('unity'))
-        file_menu.add_command(label="Open Godot Project", command=lambda: self.select_project('godot'))
-        file_menu.add_command(label="Open Unreal Project", command=lambda: self.select_project('unreal'))
-        file_menu.add_separator()
-        file_menu.add_command(label="Export Chat", command=self.export_chat)
-        file_menu.add_command(label="Exit", command=self.root.quit)
-        menubar.add_cascade(label="File", menu=file_menu)
+        self.root.configure(bg=self.colors['bg'])
         
-        tools_menu = tk.Menu(menubar, tearoff=0, bg=self.bg_color, fg=self.fg_color)
-        tools_menu.add_command(label="Search Assets", command=self.open_asset_search)
-        tools_menu.add_command(label="View System Specs", command=self.show_specs)
-        tools_menu.add_command(label="View Logs", command=self.show_logs)
-        menubar.add_cascade(label="Tools", menu=tools_menu)
+        # Configure ttk styles
+        style = ttk.Style()
+        style.theme_use('clam')
         
-        memory_menu = tk.Menu(menubar, tearoff=0, bg=self.bg_color, fg=self.fg_color)
-        memory_menu.add_command(label="View Project Memory", command=self.show_memory)
-        memory_menu.add_command(label="View TODOs", command=self.show_todos)
-        memory_menu.add_command(label="Clear Memory", command=self.clear_memory_confirm)
-        menubar.add_cascade(label="Memory", menu=memory_menu)
-        
-        help_menu = tk.Menu(menubar, tearoff=0, bg=self.bg_color, fg=self.fg_color)
-        help_menu.add_command(label="About", command=self.show_about)
-        menubar.add_cascade(label="Help", menu=help_menu)
-        
-        self.root.config(menu=menubar)
+        style.configure('Modern.TCombobox',
+                       fieldbackground=self.colors['surface'],
+                       background=self.colors['surface'],
+                       foreground=self.colors['text'],
+                       bordercolor=self.colors['border'],
+                       arrowcolor=self.colors['text'])
     
-    def create_widgets(self):
-        toolbar = tk.Frame(self.root, bg=self.bg_color, height=60)
-        toolbar.pack(fill=tk.X, padx=10, pady=5)
+    def create_ui(self):
+        """Create modern UI layout"""
+        # Header
+        self.create_header()
         
-        tk.Label(toolbar, text="Engine:", bg=self.bg_color, fg=self.fg_color).pack(side=tk.LEFT, padx=5)
+        # Main content area
+        main_frame = tk.Frame(self.root, bg=self.colors['bg'])
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=0, pady=0)
+        
+        # Sidebar
+        self.create_sidebar(main_frame)
+        
+        # Chat area
+        self.create_chat_area(main_frame)
+        
+        # Input area
+        self.create_input_area()
+        
+        # Status bar
+        self.create_status_bar()
+        
+        # Display history and welcome
+        self.display_chat_history()
+        self.add_system_message("🎮 Welcome to GameDev AI Assistant!")
+        
+        # Check AI status
+        if hasattr(self.ai, 'check_ollama_status'):
+            if not self.ai.check_ollama_status():
+                self.add_system_message("⚠️ Ollama not detected. Check connection in Tools menu.")
+    
+    def create_header(self):
+        """Modern header with toolbar"""
+        header = tk.Frame(self.root, bg=self.colors['surface'], height=60)
+        header.pack(fill=tk.X, padx=0, pady=0)
+        header.pack_propagate(False)
+        
+        # Left side - Title and Engine selector
+        left_frame = tk.Frame(header, bg=self.colors['surface'])
+        left_frame.pack(side=tk.LEFT, padx=20, pady=10)
+        
+        # App title
+        title_label = tk.Label(left_frame, text="🎮 GameDev AI",
+                              bg=self.colors['surface'],
+                              fg=self.colors['text'],
+                              font=("Segoe UI", 14, "bold"))
+        title_label.pack(side=tk.LEFT, padx=(0, 20))
+        
+        # Engine selector
+        tk.Label(left_frame, text="Engine:",
+                bg=self.colors['surface'],
+                fg=self.colors['text_secondary'],
+                font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0, 5))
         
         self.engine_var = tk.StringVar(value=self.current_engine)
-        engine_combo = ttk.Combobox(toolbar, textvariable=self.engine_var, 
-                                    values=['unity', 'godot', 'unreal'], state='readonly', width=10)
-        engine_combo.pack(side=tk.LEFT, padx=5)
+        engine_combo = ttk.Combobox(left_frame, textvariable=self.engine_var,
+                                    values=['unity', 'godot', 'unreal'],
+                                    state='readonly', width=10,
+                                    style='Modern.TCombobox')
+        engine_combo.pack(side=tk.LEFT, padx=(0, 10))
         engine_combo.bind('<<ComboboxSelected>>', self.on_engine_change)
         
-        tk.Label(toolbar, text="Project:", bg=self.bg_color, fg=self.fg_color).pack(side=tk.LEFT, padx=5)
+        # Right side - Action buttons
+        right_frame = tk.Frame(header, bg=self.colors['surface'])
+        right_frame.pack(side=tk.RIGHT, padx=20, pady=10)
         
-        self.project_label = tk.Label(toolbar, text=self.get_current_project_path(),
-                                      bg=self.bg_color, fg="#888", width=40, anchor='w')
-        self.project_label.pack(side=tk.LEFT, padx=5)
+        # Modern buttons
+        self.create_modern_button(right_frame, "📁 Open Project",
+                                 lambda: self.select_project(self.current_engine),
+                                 self.colors['accent']).pack(side=tk.LEFT, padx=5)
         
-        tk.Button(toolbar, text="Browse", command=lambda: self.select_project(self.current_engine),
-                 bg=self.button_bg, fg=self.fg_color).pack(side=tk.LEFT, padx=5)
+        self.create_modern_button(right_frame, "🔍 Assets",
+                                 self.open_asset_search,
+                                 self.colors['success']).pack(side=tk.LEFT, padx=5)
         
-        tk.Button(toolbar, text="🔍 Assets", command=self.open_asset_search,
-                 bg="#059669", fg=self.fg_color).pack(side=tk.LEFT, padx=5)
+        self.create_modern_button(right_frame, "⚙️ Settings",
+                                 self.show_settings,
+                                 self.colors['surface_alt']).pack(side=tk.LEFT, padx=5)
+    
+    def create_modern_button(self, parent, text, command, bg_color):
+        """Create a modern styled button"""
+        btn = tk.Button(parent, text=text, command=command,
+                       bg=bg_color, fg=self.colors['text'],
+                       font=("Segoe UI", 9),
+                       relief=tk.FLAT, cursor="hand2",
+                       padx=15, pady=8,
+                       activebackground=self.colors['accent_hover'],
+                       activeforeground=self.colors['text'])
         
-        content_frame = tk.Frame(self.root, bg=self.bg_color)
-        content_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        # Hover effects
+        def on_enter(e):
+            btn['bg'] = self.colors['accent_hover']
+        def on_leave(e):
+            btn['bg'] = bg_color
         
-        sidebar = tk.Frame(content_frame, bg=self.input_bg, width=200)
-        sidebar.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 5))
+        btn.bind("<Enter>", on_enter)
+        btn.bind("<Leave>", on_leave)
+        
+        return btn
+    
+    def create_sidebar(self, parent):
+        """Modern sidebar with context info"""
+        sidebar = tk.Frame(parent, bg=self.colors['surface'], width=250)
+        sidebar.pack(side=tk.LEFT, fill=tk.Y, padx=0, pady=0)
         sidebar.pack_propagate(False)
         
-        tk.Label(sidebar, text="📋 Context", bg=self.input_bg, 
-                fg=self.fg_color, font=("Arial", 10, "bold")).pack(pady=10)
+        # Sidebar header
+        sidebar_header = tk.Frame(sidebar, bg=self.colors['surface_alt'], height=50)
+        sidebar_header.pack(fill=tk.X)
+        sidebar_header.pack_propagate(False)
         
-        self.context_text = tk.Text(sidebar, bg=self.input_bg, fg=self.fg_color,
-                                   font=("Consolas", 8), wrap=tk.WORD, height=20)
-        self.context_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        tk.Label(sidebar_header, text="📊 Project Context",
+                bg=self.colors['surface_alt'],
+                fg=self.colors['text'],
+                font=("Segoe UI", 11, "bold")).pack(pady=15, padx=15, anchor='w')
+        
+        # Context text area
+        context_frame = tk.Frame(sidebar, bg=self.colors['surface'])
+        context_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        self.context_text = tk.Text(context_frame,
+                                   bg=self.colors['surface_alt'],
+                                   fg=self.colors['text'],
+                                   font=("Consolas", 9),
+                                   wrap=tk.WORD,
+                                   relief=tk.FLAT,
+                                   padx=10, pady=10,
+                                   cursor="arrow")
+        self.context_text.pack(fill=tk.BOTH, expand=True)
+        
+        # Quick actions
+        actions_frame = tk.Frame(sidebar, bg=self.colors['surface'])
+        actions_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+        
+        self.create_modern_button(actions_frame, "➕ Add TODO",
+                                 self.quick_add_todo,
+                                 self.colors['surface_alt']).pack(fill=tk.X, pady=2)
+        
+        self.create_modern_button(actions_frame, "🔍 Find Script",
+                                 self.find_script,
+                                 self.colors['surface_alt']).pack(fill=tk.X, pady=2)
+        
+        self.create_modern_button(actions_frame, "📋 View Memory",
+                                 self.show_memory,
+                                 self.colors['surface_alt']).pack(fill=tk.X, pady=2)
+        
         self.update_context_display()
+    
+    def create_chat_area(self, parent):
+        """Modern chat display area"""
+        chat_container = tk.Frame(parent, bg=self.colors['bg'])
+        chat_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=0, pady=0)
         
-        chat_frame = tk.Frame(content_frame, bg=self.bg_color)
-        chat_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        
+        # Chat display
         self.chat_display = scrolledtext.ScrolledText(
-            chat_frame, bg=self.bg_color, fg=self.fg_color,
-            font=("Consolas", 10), wrap=tk.WORD, state=tk.DISABLED
+            chat_container,
+            bg=self.colors['bg'],
+            fg=self.colors['text'],
+            font=("Segoe UI", 10),
+            wrap=tk.WORD,
+            relief=tk.FLAT,
+            padx=20, pady=20,
+            cursor="arrow",
+            state=tk.DISABLED
         )
         self.chat_display.pack(fill=tk.BOTH, expand=True)
         
-        self.chat_display.tag_config("user", foreground="#60a5fa", font=("Consolas", 10, "bold"))
-        self.chat_display.tag_config("ai", foreground="#34d399", font=("Consolas", 10, "bold"))
-        self.chat_display.tag_config("system", foreground="#fbbf24", font=("Consolas", 9, "italic"))
+        # Configure tags for modern message styling
+        self.chat_display.tag_config("user",
+                                    foreground=self.colors['user_msg'],
+                                    font=("Segoe UI", 10, "bold"))
+        self.chat_display.tag_config("ai",
+                                    foreground=self.colors['ai_msg'],
+                                    font=("Segoe UI", 10, "bold"))
+        self.chat_display.tag_config("system",
+                                    foreground=self.colors['text_secondary'],
+                                    font=("Segoe UI", 9, "italic"))
+        self.chat_display.tag_config("timestamp",
+                                    foreground=self.colors['text_secondary'],
+                                    font=("Segoe UI", 8))
+    
+    def create_input_area(self):
+        """Modern input area with enhanced controls"""
+        input_container = tk.Frame(self.root, bg=self.colors['surface'], height=120)
+        input_container.pack(fill=tk.X, padx=0, pady=0)
+        input_container.pack_propagate(False)
         
-        input_frame = tk.Frame(self.root, bg=self.bg_color)
-        input_frame.pack(fill=tk.X, padx=10, pady=10)
+        # Input frame with padding
+        input_frame = tk.Frame(input_container, bg=self.colors['surface'])
+        input_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=15)
         
-        action_frame = tk.Frame(input_frame, bg=self.bg_color)
-        action_frame.pack(fill=tk.X, pady=(0, 5))
-        
-        tk.Button(action_frame, text="📝 TODO", command=self.quick_add_todo,
-                 bg="#0e639c", fg=self.fg_color, width=10).pack(side=tk.LEFT, padx=2)
-        tk.Button(action_frame, text="🔍 Find", command=self.find_script,
-                 bg="#0e639c", fg=self.fg_color, width=10).pack(side=tk.LEFT, padx=2)
-        
-        self.input_box = tk.Text(input_frame, bg=self.input_bg, fg=self.fg_color,
-                                font=("Consolas", 10), height=3, wrap=tk.WORD)
-        self.input_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        # Text input
+        self.input_box = tk.Text(input_frame,
+                                bg=self.colors['surface_alt'],
+                                fg=self.colors['text'],
+                                font=("Segoe UI", 10),
+                                height=3,
+                                wrap=tk.WORD,
+                                relief=tk.FLAT,
+                                padx=15, pady=10,
+                                insertbackground=self.colors['accent'])
+        self.input_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
         self.input_box.bind('<Return>', self.on_enter_key)
+        self.input_box.bind('<Shift-Return>', lambda e: None)  # Allow Shift+Enter for newline
         
-        button_panel = tk.Frame(input_frame, bg=self.bg_color)
-        button_panel.pack(side=tk.RIGHT)
+        # Button panel
+        button_frame = tk.Frame(input_frame, bg=self.colors['surface'])
+        button_frame.pack(side=tk.RIGHT)
         
-        self.send_btn = tk.Button(button_panel, text="Send", command=self.send_message,
-                                  bg=self.button_bg, fg=self.fg_color, width=10, height=2)
+        self.send_btn = self.create_modern_button(button_frame, "▶ Send",
+                                                  self.send_message,
+                                                  self.colors['accent'])
         self.send_btn.pack(pady=2)
         
-        tk.Button(button_panel, text="Clear", command=self.clear_chat,
-                 bg="#dc2626", fg=self.fg_color, width=10).pack(pady=2)
-        
-        self.status_bar = tk.Label(self.root, text="Ready", bg=self.input_bg,
-                                  fg=self.fg_color, anchor='w', padx=10)
+        self.create_modern_button(button_frame, "🗑️ Clear",
+                                 self.clear_chat,
+                                 self.colors['danger']).pack(pady=2)
+    
+    def create_status_bar(self):
+        """Modern status bar"""
+        self.status_bar = tk.Label(self.root,
+                                  text="● Ready",
+                                  bg=self.colors['surface_alt'],
+                                  fg=self.colors['text_secondary'],
+                                  font=("Segoe UI", 9),
+                                  anchor='w',
+                                  padx=20, pady=8)
         self.status_bar.pack(fill=tk.X, side=tk.BOTTOM)
-        
-        self.display_chat_history()
-        self.add_system_message(f"🎮 GameDev AI Assistant Ready | Engine: {self.current_engine.title()}")
     
-    def get_current_project_path(self):
-        key = f"{self.current_engine}_project_path"
-        path = self.config.get(key, "")
-        return path if path else "No project selected"
-    
-    def on_engine_change(self, event):
-        self.current_engine = self.engine_var.get()
-        self.config['current_engine'] = self.current_engine
-        self.save_config()
-        self.project_label.config(text=self.get_current_project_path())
-        self.add_system_message(f"Switched to {self.current_engine.title()}")
-        self.logger.log_action('engine_changed', {'engine': self.current_engine})
-    
-    def select_project(self, engine_type):
-        folder = filedialog.askdirectory(title=f"Select {engine_type.title()} Project")
-        
-        if folder:
-            valid = self.validate_project(folder, engine_type)
-            
-            if valid:
-                key = f"{engine_type}_project_path"
-                self.config[key] = folder
-                self.save_config()
-                self.project_label.config(text=folder, fg=self.fg_color)
-                
-                self.memory.set_project_info(engine=engine_type)
-                self.logger.log_project_opened(folder, engine_type)
-                
-                self.add_system_message(f"✓ {engine_type.title()} project loaded: {folder}")
-                self.update_context_display()
-            else:
-                self.add_system_message(f"⚠ Not a valid {engine_type.title()} project")
-    
-    def validate_project(self, path, engine):
-        path = Path(path)
-        if engine == 'unity':
-            return (path / 'Assets').exists()
-        elif engine == 'godot':
-            return (path / 'project.godot').exists()
-        elif engine == 'unreal':
-            return any(path.glob('*.uproject'))
-        return False
+    # ========== Message Handling ==========
     
     def send_message(self):
+        """Send user message"""
         message = self.input_box.get("1.0", tk.END).strip()
         if not message:
             return
@@ -211,39 +359,93 @@ class ChatWindow:
         self.input_box.delete("1.0", tk.END)
         self.add_message("You", message, "user")
         
-        self.send_btn.config(state=tk.DISABLED, text="Thinking...")
-        self.update_status("AI processing...")
+        self.send_btn.config(state=tk.DISABLED, text="⏳ Thinking...")
+        self.update_status("● AI processing...")
         
         threading.Thread(target=self.get_ai_response, args=(message,), daemon=True).start()
     
     def get_ai_response(self, message):
+        """Get AI response in background thread"""
         try:
             import time
-            start_time = time.time()
+            start = time.time()
             
-            context = self.build_full_context()
+            context = self.build_context()
             response = self.ai.generate_response(message, context, self.chat_history)
             
-            elapsed = time.time() - start_time
+            elapsed = time.time() - start
             
             self.root.after(0, lambda: self.add_message("AI", response, "ai"))
-            self.root.after(0, lambda: self.update_status(f"Response time: {elapsed:.1f}s"))
+            self.root.after(0, lambda: self.update_status(f"● Ready ({elapsed:.1f}s)"))
             
-            self.logger.log_ai_request(message, elapsed)
             self.auto_update_memory(message, response)
             
         except Exception as e:
-            self.root.after(0, lambda: self.add_system_message(f"Error: {str(e)}"))
-            self.logger.log_ai_error(str(e), message)
-        
+            self.root.after(0, lambda: self.add_system_message(f"❌ Error: {e}"))
         finally:
-            self.root.after(0, lambda: self.send_btn.config(state=tk.NORMAL, text="Send"))
+            self.root.after(0, lambda: self.send_btn.config(state=tk.NORMAL, text="▶ Send"))
     
-    def build_full_context(self):
-        project_path = self.get_current_project_path()
+    def add_message(self, sender, text, tag):
+        """Add message to chat with modern styling"""
+        timestamp = datetime.now().strftime("%H:%M")
+        
+        self.chat_display.config(state=tk.NORMAL)
+        
+        # Add spacing
+        self.chat_display.insert(tk.END, "\n")
+        
+        # Add timestamp
+        self.chat_display.insert(tk.END, f"[{timestamp}] ", "timestamp")
+        
+        # Add sender
+        self.chat_display.insert(tk.END, f"{sender}:\n", tag)
+        
+        # Add message text
+        self.chat_display.insert(tk.END, f"{text}\n")
+        
+        self.chat_display.see(tk.END)
+        self.chat_display.config(state=tk.DISABLED)
+        
+        # Save to history
+        self.chat_history.append({"sender": sender, "text": text, "timestamp": timestamp})
+        self.save_chat_history()
+    
+    def add_system_message(self, text):
+        """Add system message"""
+        if not hasattr(self, 'chat_display'):
+            return
+        
+        try:
+            self.chat_display.config(state=tk.NORMAL)
+            self.chat_display.insert(tk.END, f"\n{text}\n", "system")
+            self.chat_display.see(tk.END)
+            self.chat_display.config(state=tk.DISABLED)
+        except:
+            pass
+    
+    def clear_chat(self):
+        """Clear chat history"""
+        self.chat_display.config(state=tk.NORMAL)
+        self.chat_display.delete("1.0", tk.END)
+        self.chat_display.config(state=tk.DISABLED)
+        self.chat_history = []
+        self.save_chat_history()
+        self.add_system_message("🗑️ Chat cleared")
+    
+    # ========== Helper Methods ==========
+    
+    def on_enter_key(self, event):
+        """Handle Enter key"""
+        if not (event.state & 1):  # No Shift
+            self.send_message()
+            return "break"
+    
+    def build_context(self):
+        """Build AI context"""
         context = f"Engine: {self.current_engine.title()}\n"
         
-        if project_path != "No project selected":
+        project_path = self.get_current_project_path()
+        if project_path != "No project":
             context += f"Project: {project_path}\n"
         
         if self.config.get('memory_enabled', True):
@@ -252,7 +454,8 @@ class ChatWindow:
         return context
     
     def auto_update_memory(self, user_msg, ai_response):
-        if "script" in user_msg.lower() and (".cs" in ai_response or ".gd" in ai_response or ".cpp" in ai_response):
+        """Auto-update memory from conversation"""
+        if "script" in user_msg.lower():
             import re
             match = re.search(r'class\s+(\w+)', ai_response)
             if match:
@@ -267,166 +470,204 @@ class ChatWindow:
                 self.update_context_display()
     
     def update_context_display(self):
-        self.context_text.config(state=tk.NORMAL)
-        self.context_text.delete("1.0", tk.END)
+        """Update sidebar context"""
+        if not hasattr(self, 'context_text'):
+            return
         
-        info = self.memory.get_project_info()
-        scripts = self.memory.list_scripts()
-        todos = self.memory.list_todos()
-        
-        context = f"Project: {info.get('name', 'Unnamed')}\n"
-        context += f"Engine: {info.get('engine', 'N/A')}\n\n"
-        context += f"Scripts ({len(scripts)}):\n"
-        for script in scripts[-5:]:
-            context += f"  • {script['name']}\n"
-        context += f"\nTODOs ({len(todos)}):\n"
-        for todo in todos[:5]:
-            context += f"  ☐ {todo['task'][:30]}\n"
-        
-        self.context_text.insert("1.0", context)
-        self.context_text.config(state=tk.DISABLED)
-    
-    def on_enter_key(self, event):
-        if not (event.state & 4):
-            self.send_message()
-            return "break"
-    
-    def add_message(self, sender, text, tag):
-        timestamp = datetime.now().strftime("%H:%M")
-        self.chat_display.config(state=tk.NORMAL)
-        self.chat_display.insert(tk.END, f"\n[{timestamp}] ", "system")
-        self.chat_display.insert(tk.END, f"{sender}:\n", tag)
-        self.chat_display.insert(tk.END, f"{text}\n")
-        self.chat_display.see(tk.END)
-        self.chat_display.config(state=tk.DISABLED)
-        
-        self.chat_history.append({"sender": sender, "text": text, "timestamp": timestamp})
-        self.save_chat_history()
-    
-    def add_system_message(self, text):
-        self.chat_display.config(state=tk.NORMAL)
-        self.chat_display.insert(tk.END, f"\n{text}\n", "system")
-        self.chat_display.see(tk.END)
-        self.chat_display.config(state=tk.DISABLED)
-    
-    def clear_chat(self):
-        self.chat_display.config(state=tk.NORMAL)
-        self.chat_display.delete("1.0", tk.END)
-        self.chat_display.config(state=tk.DISABLED)
-        self.chat_history = []
-        self.save_chat_history()
+        try:
+            self.context_text.config(state=tk.NORMAL)
+            self.context_text.delete("1.0", tk.END)
+            
+            info = self.memory.get_project_info()
+            scripts = self.memory.list_scripts()
+            todos = self.memory.list_todos()
+            
+            context = f"📦 Project: {info.get('name', 'Unnamed')}\n"
+            context += f"🎮 Engine: {info.get('engine', 'N/A')}\n\n"
+            
+            context += f"📝 Scripts ({len(scripts)}):\n"
+            for script in scripts[-5:]:
+                context += f"  • {script['name']}\n"
+            
+            context += f"\n✅ TODOs ({len(todos)}):\n"
+            for todo in todos[:5]:
+                task = todo['task'][:30]
+                context += f"  ☐ {task}...\n" if len(todo['task']) > 30 else f"  ☐ {task}\n"
+            
+            self.context_text.insert("1.0", context)
+            self.context_text.config(state=tk.DISABLED)
+        except:
+            pass
     
     def update_status(self, text):
+        """Update status bar"""
         self.status_bar.config(text=text)
     
     def display_chat_history(self):
+        """Display saved chat history"""
         for msg in self.chat_history[-20:]:
             tag = "user" if msg['sender'] == "You" else "ai"
             self.chat_display.config(state=tk.NORMAL)
-            self.chat_display.insert(tk.END, f"\n[{msg['timestamp']}] ", "system")
+            self.chat_display.insert(tk.END, f"\n[{msg['timestamp']}] ", "timestamp")
             self.chat_display.insert(tk.END, f"{msg['sender']}:\n", tag)
             self.chat_display.insert(tk.END, f"{msg['text']}\n")
             self.chat_display.config(state=tk.DISABLED)
     
+    # ========== File Operations ==========
+    
     def load_chat_history(self):
+        """Load chat history"""
         file = Path('data/chat_history.json')
+        file.parent.mkdir(exist_ok=True)
         if file.exists():
-            with open(file, 'r') as f:
-                return json.load(f)
+            try:
+                with open(file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except:
+                return []
         return []
     
     def save_chat_history(self):
-        with open('data/chat_history.json', 'w') as f:
-            json.dump(self.chat_history[-100:], f, indent=2)
-    
-    # CONTINUATION OF chat_window.py - Menu handlers and helpers
+        """Save chat history"""
+        try:
+            Path('data').mkdir(exist_ok=True)
+            with open('data/chat_history.json', 'w', encoding='utf-8') as f:
+                json.dump(self.chat_history[-100:], f, indent=2, ensure_ascii=False)
+        except:
+            pass
     
     def save_config(self):
-        with open('config.json', 'w') as f:
-            json.dump(self.config, f, indent=2)
+        """Save configuration"""
+        try:
+            with open('config.json', 'w', encoding='utf-8') as f:
+                json.dump(self.config, f, indent=2, ensure_ascii=False)
+        except:
+            pass
     
     def load_project_context(self):
+        """Load project context on startup"""
         for engine in ['unity', 'godot', 'unreal']:
             key = f"{engine}_project_path"
             if self.config.get(key):
                 self.memory.set_project_info(engine=engine)
     
-    def export_chat(self):
-        file = filedialog.asksaveasfilename(defaultextension=".txt",
-                                           filetypes=[("Text files", "*.txt")])
-        if file:
-            with open(file, 'w') as f:
-                for msg in self.chat_history:
-                    f.write(f"[{msg['timestamp']}] {msg['sender']}: {msg['text']}\n\n")
-            messagebox.showinfo("Export", "Chat exported successfully!")
+    # ========== Menu Actions ==========
+    
+    def on_engine_change(self, event):
+        """Handle engine change"""
+        self.current_engine = self.engine_var.get()
+        self.config['current_engine'] = self.current_engine
+        self.save_config()
+        self.add_system_message(f"🎯 Switched to {self.current_engine.title()}")
+        self.update_context_display()
+    
+    def select_project(self, engine_type):
+        """Select project folder"""
+        folder = filedialog.askdirectory(title=f"Select {engine_type.title()} Project")
+        
+        if folder:
+            valid = self.validate_project(folder, engine_type)
+            
+            if valid:
+                key = f"{engine_type}_project_path"
+                self.config[key] = folder
+                self.save_config()
+                self.memory.set_project_info(engine=engine_type)
+                
+                self.add_system_message(f"✓ {engine_type.title()} project loaded")
+                self.update_context_display()
+            else:
+                self.add_system_message(f"⚠ Not a valid {engine_type.title()} project")
+    
+    def validate_project(self, path, engine):
+        """Validate project folder"""
+        path = Path(path)
+        if engine == 'unity':
+            return (path / 'Assets').exists()
+        elif engine == 'godot':
+            return (path / 'project.godot').exists()
+        elif engine == 'unreal':
+            return any(path.glob('*.uproject'))
+        return False
+    
+    def get_current_project_path(self):
+        """Get current project path"""
+        key = f"{self.current_engine}_project_path"
+        return self.config.get(key, "No project")
     
     def open_asset_search(self):
-        search_query = simpledialog.askstring("Asset Search", "Search for assets:")
-        if search_query:
-            self.add_system_message(f"🔍 Searching for: {search_query}")
-            try:
-                from tools.search_assets import search_assets
-                results = search_assets(search_query, free_only=False)
-                
-                total = results.get('total_results', 0)
-                if total > 0:
-                    self.add_system_message(f"Found {total} results")
-                    
-                    for source, items in results.get('sources', {}).items():
-                        if isinstance(items, list) and items:
-                            self.add_system_message(f"\n{source.upper()}:")
-                            for item in items[:3]:
-                                if isinstance(item, dict):
-                                    name = item.get('name', 'Unknown')
-                                    url = item.get('url', '#')
-                                    self.add_system_message(f"  • {name}\n    {url}")
-                else:
-                    self.add_system_message("No results found")
-                    
-            except Exception as e:
-                self.add_system_message(f"Search error: {e}")
+        """Open asset search dialog"""
+        query = simpledialog.askstring("Asset Search", "Search for assets:")
+        if query:
+            self.add_system_message(f"🔍 Searching for: {query}")
+            # TODO: Implement actual search
+            self.add_system_message("Asset search coming soon!")
     
-    def show_specs(self):
-        specs_file = Path('data/system_specs.json')
-        if specs_file.exists():
-            with open(specs_file) as f:
-                specs = json.load(f)
-                tier = specs.get('performance_tier', {})
-                cpu = specs.get('cpu', {})
-                mem = specs.get('memory', {})
-                
-                info = f"""SYSTEM SPECIFICATIONS
-
-Performance: {tier.get('tier', 'unknown').upper()}
-Score: {tier.get('score', 0)}/100
-
-CPU: {cpu.get('brand', 'Unknown')}
-Cores: {cpu.get('physical_cores', 'N/A')}
-
-Memory: {mem.get('total_gb', 0)} GB
-Available: {mem.get('available_gb', 0)} GB
-
-{tier.get('description', '')}
-"""
-                messagebox.showinfo("System Specs", info)
-        else:
-            messagebox.showinfo("System Specs", "Run hardware detection first")
+    def show_settings(self):
+        """Show settings dialog"""
+        settings_win = tk.Toplevel(self.root)
+        settings_win.title("Settings")
+        settings_win.geometry("500x400")
+        settings_win.configure(bg=self.colors['surface'])
+        
+        # Settings content
+        tk.Label(settings_win, text="⚙️ Settings",
+                bg=self.colors['surface'],
+                fg=self.colors['text'],
+                font=("Segoe UI", 14, "bold")).pack(pady=20)
+        
+        # AI Model setting
+        frame = tk.Frame(settings_win, bg=self.colors['surface'])
+        frame.pack(fill=tk.X, padx=20, pady=10)
+        
+        tk.Label(frame, text="AI Model:",
+                bg=self.colors['surface'],
+                fg=self.colors['text']).pack(anchor='w')
+        
+        model_var = tk.StringVar(value=self.config.get('ai_model', 'llama3.2:3b'))
+        model_entry = tk.Entry(frame, textvariable=model_var,
+                              bg=self.colors['surface_alt'],
+                              fg=self.colors['text'],
+                              font=("Segoe UI", 10),
+                              relief=tk.FLAT)
+        model_entry.pack(fill=tk.X, pady=5)
+        
+        def save_settings():
+            self.config['ai_model'] = model_var.get()
+            self.save_config()
+            messagebox.showinfo("Settings", "Restart app for changes to take effect")
+            settings_win.destroy()
+        
+        self.create_modern_button(settings_win, "💾 Save Settings",
+                                 save_settings,
+                                 self.colors['accent']).pack(pady=20)
     
-    def show_logs(self):
-        stats = self.logger.get_stats()
-        info = f"""USAGE STATISTICS
-
-Total Actions: {stats['total_actions']}
-Scripts Created: {stats['scripts_created']}
-Scripts Modified: {stats['scripts_modified']}
-AI Requests: {stats['ai_requests']}
-Errors: {stats['errors']}
-"""
-        messagebox.showinfo("Logs", info)
+    def quick_add_todo(self):
+        """Quick add TODO"""
+        todo = simpledialog.askstring("Add TODO", "Enter task:")
+        if todo:
+            self.memory.add_todo(todo, "medium")
+            self.update_context_display()
+            self.add_system_message(f"✓ Added: {todo}")
+    
+    def find_script(self):
+        """Find script in memory"""
+        query = simpledialog.askstring("Find Script", "Search for:")
+        if query:
+            results = self.memory.search_scripts(query)
+            if results:
+                msg = f"Found {len(results)} script(s):\n"
+                for s in results:
+                    msg += f"• {s['name']}\n"
+                messagebox.showinfo("Search Results", msg)
+            else:
+                messagebox.showinfo("Search Results", "No scripts found")
     
     def show_memory(self):
-        stats = self.memory.get_stats()
-        info = f"""PROJECT MEMORY
+        """Show project memory stats"""
+        try:
+            stats = self.memory.get_stats()
+            info = f"""📊 Project Memory
 
 Scripts: {stats['total_scripts']}
 Assets: {stats['total_assets']}
@@ -434,61 +675,16 @@ TODOs: {stats['pending_todos']}
 Completed: {stats['completed_tasks']}
 Days Active: {stats['days_active']}
 """
-        messagebox.showinfo("Project Memory", info)
-    
-    def show_todos(self):
-        todos = self.memory.list_todos()
-        if todos:
-            todo_text = "PENDING TASKS:\n\n"
-            for i, todo in enumerate(todos, 1):
-                priority = todo.get('priority', 'medium').upper()
-                task = todo.get('task', '')
-                todo_text += f"{i}. [{priority}] {task}\n"
-            messagebox.showinfo("TODOs", todo_text)
-        else:
-            messagebox.showinfo("TODOs", "No pending tasks")
-    
-    def clear_memory_confirm(self):
-        if messagebox.askyesno("Clear Memory", 
-                               "Delete all project memory?\n\n" +
-                               "This includes scripts, assets, and TODOs."):
-            self.memory.clear_memory()
-            self.update_context_display()
-            self.add_system_message("✓ Memory cleared")
-    
-    def show_about(self):
-        messagebox.showinfo("About", 
-            "GameDev AI Assistant v1.0.0\n\n" +
-            "Complete Edition - All Phases\n\n" +
-            "Features:\n" +
-            "• Unity, Godot, Unreal\n" +
-            "• Local AI (Ollama)\n" +
-            "• Project Memory\n" +
-            "• Asset Search\n" +
-            "• Hardware Detection")
-    
-    def quick_add_todo(self):
-        todo = simpledialog.askstring("Add TODO", "Enter task:")
-        if todo:
-            priority = simpledialog.askstring("Priority", 
-                                             "Priority (low/medium/high):", 
-                                             initialvalue="medium")
-            if priority:
-                self.memory.add_todo(todo, priority)
-                self.update_context_display()
-                self.add_system_message(f"✓ Added TODO: {todo}")
-    
-    def find_script(self):
-        query = simpledialog.askstring("Find Script", "Search for:")
-        if query:
-            results = self.memory.search_scripts(query)
-            if results:
-                result_text = f"Found {len(results)} script(s):\n\n"
-                for script in results:
-                    result_text += f"• {script['name']}\n  {script['purpose']}\n\n"
-                messagebox.showinfo("Search Results", result_text)
-            else:
-                messagebox.showinfo("Search Results", "No scripts found")
+            messagebox.showinfo("Project Memory", info)
+        except:
+            messagebox.showinfo("Project Memory", "No memory data available")
     
     def run(self):
+        """Run the application"""
         self.root.mainloop()
+
+
+# Allow direct execution
+if __name__ == "__main__":
+    app = ChatWindow()
+    app.run()

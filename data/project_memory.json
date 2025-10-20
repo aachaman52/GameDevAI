@@ -1,1 +1,33 @@
-{}
+{
+  "project_info": {
+    "name": "",
+    "genre": "",
+    "description": "",
+    "engine": "",
+    "created": "2025-10-19T21:41:26.127251"
+  },
+  "scripts": [
+    {
+      "name": "CharacterControllerSimple",
+      "purpose": "can u write a script in csharp of character controller script in simple",
+      "features": [],
+      "created": "2025-10-20T10:54:35.892215",
+      "last_modified": "2025-10-20T10:54:35.892226"
+    }
+  ],
+  "assets": [],
+  "todos": [
+    {
+      "task": "script",
+      "priority": "high",
+      "added": "2025-10-19T22:02:33.033709",
+      "completed": false
+    }
+  ],
+  "completed_tasks": [],
+  "user_preferences": {
+    "coding_style": "standard",
+    "naming_convention": "PascalCase"
+  },
+  "last_updated": "2025-10-20T10:54:35.892229"
+}
